@@ -1,4 +1,4 @@
-package com.example.visionassist.logic
+import com.example.visionassist.logic.NameExtractor
 
 import android.content.Context
 import android.content.Intent

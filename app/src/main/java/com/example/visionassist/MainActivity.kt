@@ -1,5 +1,6 @@
 package com.example.visionassist
 
+import VoiceAssistant
 import android.Manifest
 import android.content.Intent
 import android.os.Bundle
@@ -9,7 +10,6 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
-import com.example.visionassist.logic.VoiceAssistant
 import com.example.visionassist.ui.design.WelcomeScreen
 import com.example.visionassist.ui.theme.VisionassistTheme
 
@@ -95,3 +95,4 @@ class MainActivity : ComponentActivity() {
         super.onDestroy()
     }
 }
+
