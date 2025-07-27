@@ -98,6 +98,7 @@ class DashboardActivity : ComponentActivity() {
         }
     }
 
+    // In the DashboardActivityContent composable, update the call:
     @Composable
     private fun DashboardActivityContent() {
         VisionassistTheme {
@@ -107,6 +108,7 @@ class DashboardActivity : ComponentActivity() {
             ) {
                 DashboardScreen(
                     userName = userName,
+                    isListening = isListening, // Add this line
                     onModuleSelected = { module ->
                         handleModuleSelection(module)
                     }
@@ -114,6 +116,8 @@ class DashboardActivity : ComponentActivity() {
             }
         }
     }
+
+
 
     private fun welcomeUserAndListModules() {
         try {
@@ -215,8 +219,13 @@ class DashboardActivity : ComponentActivity() {
         try {
             when (module) {
                 Module.OBJECT_DETECTION -> {
+                    // --- REPLACE THE TODO LINE ---
                     // TODO: Start object detection activity
-                    // startActivity(Intent(this, ObjectDetectionActivity::class.java))
+                    // --- WITH THIS CODE ---
+                    val intent = Intent(this, ObjectDetectionActivity::class.java)
+                    startActivity(intent)
+                    // Optional: Call finish() if you don't want Dashboard in the back stack
+                    // finish()
                 }
                 Module.CALL_CONTACTS -> {
                     // TODO: Start call contacts activity

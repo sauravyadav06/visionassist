@@ -16,18 +16,22 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.*
-import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.visionassist.R
-import kotlin.math.cos
 import kotlin.math.sin
 
 @Composable
-fun DashboardScreen(userName: String, onModuleSelected: (Module) -> Unit) {
+fun DashboardScreen(
+    userName: String,
+    isListening: Boolean = false,
+    onModuleSelected: (Module) -> Unit
+) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -42,18 +46,19 @@ fun DashboardScreen(userName: String, onModuleSelected: (Module) -> Unit) {
                 )
             )
     ) {
-        // Animated background particles
-        BackgroundParticles()
-
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Welcome Section with animation
+            // Welcome Section
             WelcomeHeader(userName)
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Voice Listening Indicator
+            VoiceListeningIndicator(isListening)
+            Spacer(modifier = Modifier.height(20.dp))
 
             // Dashboard Grid
             DashboardGrid(onModuleSelected)
@@ -62,123 +67,139 @@ fun DashboardScreen(userName: String, onModuleSelected: (Module) -> Unit) {
 }
 
 @Composable
-private fun BackgroundParticles() {
-    val infiniteTransition = rememberInfiniteTransition()
-
-    // Create animations for each particle
-    val particleAnimations = List(20) { index ->
-        infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 6.28f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(3000 + index * 100, easing = LinearEasing)
-            )
-        )
-    }
-
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .drawBehind {
-                // Draw subtle floating particles in background
-                particleAnimations.forEachIndexed { index, animation ->
-                    val alpha = (sin(animation.value) + 1) / 2 * 0.1f
-
-                    drawCircle(
-                        color = Color(0xFF00FF7F).copy(alpha = alpha),
-                        radius = 2f,
-                        center = Offset(
-                            (size.width * 0.1f * (index % 10)).coerceIn(0f, size.width),
-                            (size.height * 0.05f * (index / 2)).coerceIn(0f, size.height)
-                        )
-                    )
-                }
-            }
-    )
-}
-
-@Composable
 private fun WelcomeHeader(userName: String) {
-    val infiniteTransition = rememberInfiniteTransition()
-    val waveOffset by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 6.28f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = LinearEasing)
-        )
-    )
-
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.fillMaxWidth()
     ) {
-        // Animated underline effect
-        Box(
-            modifier = Modifier
-                .fillMaxWidth(0.8f)
-                .height(4.dp)
-                .background(
-                    brush = Brush.linearGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color(0xFF00FF7F),
-                            Color.Transparent
-                        )
-                    )
-                )
-                .drawBehind {
-                    val waveHeight = 2f
-                    val waveLength = size.width / 4
-                    val centerY = size.height / 2
-
-                    drawLine(
-                        color = Color(0xFF00FF7F),
-                        start = Offset(0f, centerY),
-                        end = Offset(size.width, centerY),
-                        strokeWidth = 2f
-                    )
-                }
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
         Text(
             text = "Welcome back, $userName!",
-            color = Color(0xFFADFFB0),
-            fontSize = 32.sp,
-            fontWeight = FontWeight.ExtraBold,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.scale(1f + 0.02f * sin(waveOffset))
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Text(
-            text = "How may I assist you today?",
-            color = Color(0xFF88FFCC),
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Medium,
+            color = Color(0xFFADFFB0), // Soft neon green
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold,
             textAlign = TextAlign.Center
         )
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Subtle animated indicator
-        Box(
-            modifier = Modifier
-                .size(8.dp)
-                .drawBehind {
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFF00FF7F),
-                                Color(0xFF00FF7F).copy(alpha = 0.5f),
-                                Color.Transparent
-                            )
+        Text(
+            text = "How may I assist you today?",
+            color = Color(0xFF88FFCC), // Lighter green
+            fontSize = 18.sp,
+            textAlign = TextAlign.Center
+        )
+    }
+}
+
+@Composable
+private fun VoiceListeningIndicator(isListening: Boolean) {
+    if (isListening) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            // Pulsing Microphone Animation
+            PulsingMicrophone()
+            Spacer(Modifier.height(12.dp))
+
+            // Listening Status Text
+            Text(
+                text = "Listening... Speak now",
+                color = Color(0xFF00FF7F),
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            // Waveform Visualization
+            AudioWaveform()
+        }
+    } else {
+        // Show ready status when not listening
+        Text(
+            text = "Ready to listen",
+            color = Color(0xFF88FFCC).copy(alpha = 0.7f),
+            fontSize = 14.sp
+        )
+    }
+}
+
+@Composable
+private fun PulsingMicrophone() {
+    val infiniteTransition = rememberInfiniteTransition()
+    val scale by infiniteTransition.animateFloat(
+        initialValue = 0.9f,
+        targetValue = 1.1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        )
+    )
+
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .scale(scale)
+            .drawBehind {
+                // Microphone icon drawing
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFF00FF7F),
+                            Color(0xFF00AA55)
                         )
                     )
-                }
+                )
+
+                // Microphone stand
+                drawRect(
+                    color = Color(0xFF00FF7F),
+                    topLeft = Offset(size.width / 2 - 2.dp.toPx(), size.height * 0.6f),
+                    size = androidx.compose.ui.geometry.Size(4.dp.toPx(), 12.dp.toPx())
+                )
+            },
+        contentAlignment = Alignment.Center
+    ) {
+        // Microphone grille
+        Box(
+            modifier = Modifier
+                .size(12.dp)
+                .clip(RoundedCornerShape(50))
+                .background(Color.Black)
         )
+    }
+}
+
+@Composable
+private fun AudioWaveform() {
+    val infiniteTransition = rememberInfiniteTransition()
+
+    // Create multiple animated bars for waveform effect
+    val barHeights = List(7) { index ->
+        infiniteTransition.animateFloat(
+            initialValue = 0.3f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(800 + index * 100, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            )
+        )
+    }
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        modifier = Modifier.padding(horizontal = 16.dp)
+    ) {
+        barHeights.forEach { heightAnimation ->
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .height((20 * heightAnimation.value).dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(Color(0xFF00FF7F))
+            )
+        }
     }
 }
 
