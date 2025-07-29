@@ -1,5 +1,3 @@
-// File: app/src/main/java/com/example/visionassist/ui/design/ObjectDetectionScreen.kt
-
 package com.example.visionassist.ui.design
 
 import androidx.compose.foundation.background

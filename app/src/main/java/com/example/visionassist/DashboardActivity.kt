@@ -1,5 +1,6 @@
 package com.example.visionassist
 
+
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
@@ -230,8 +231,11 @@ class DashboardActivity : ComponentActivity() {
                 Module.CALL_CONTACTS -> {
                     // TODO: Start call contacts activity
                 }
-                Module.READ_TEXT -> {
-                    // TODO: Start read text activity
+                Module.READ_TEXT -> { // <-- Updated Section
+                    val intent = Intent(this, ReadTextActivity::class.java)
+                    startActivity(intent)
+                    // Optional: Call finish() if you don't want Dashboard in the back stack
+                    // finish()
                 }
                 Module.WEATHER -> {
                     // TODO: Start weather activity
