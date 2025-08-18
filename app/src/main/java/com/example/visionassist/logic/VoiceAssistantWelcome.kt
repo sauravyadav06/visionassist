@@ -11,7 +11,8 @@ import android.speech.tts.TextToSpeech
 import android.widget.Toast
 import java.util.*
 
-class VoiceAssistant(private val context: Context) {
+
+class VoiceAssistantWelcome(private val context: Context) {
 
     private var textToSpeech: TextToSpeech? = null
     private var speechRecognizer: SpeechRecognizer? = null

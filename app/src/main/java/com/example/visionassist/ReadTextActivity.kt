@@ -1,283 +1,246 @@
-package com.example.visionassist // Adjust package name if needed
+package com.example.visionassist
 
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.speech.tts.TextToSpeech
 import android.util.Log
-import android.widget.Toast
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
-import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.LifecycleOwner
-import com.example.visionassist.ui.design.ReadTextScreen // Import the Composable
-import com.example.visionassist.ui.theme.VisionassistTheme
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.Executors
-import androidx.camera.core.CameraSelector
-
-// Add these imports for Text Recognition and Image Analysis
-import android.graphics.Bitmap
-import android.graphics.Matrix
-import androidx.camera.core.ImageAnalysis
-import androidx.camera.core.ImageProxy
+import com.example.visionassist.design.ReadTextScreen
 import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
-// For handling image rotation
-import android.media.ExifInterface
-import android.util.Size
-import java.io.ByteArrayOutputStream
-import android.graphics.ImageFormat
-import androidx.camera.core.CameraInfo
+import java.util.*
+import java.util.concurrent.Executors
 
 class ReadTextActivity : ComponentActivity() {
 
-    companion object {
-        private const val TAG = "ReadTextActivity"
-    }
-
-    // For requesting camera permission
-    private val requestPermissionLauncher = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            Log.d(TAG, "Camera permission granted")
-            startCamera()
-        } else {
-            Log.e(TAG, "Camera permission denied")
-            Toast.makeText(this, "Camera permission is required for text reading.", Toast.LENGTH_LONG).show()
-            // Optionally, finish the activity if permission is critical
-            // finish()
-        }
-    }
-
-    // CameraX related variables
-    private var cameraExecutor: ExecutorService? = null
-    private var previewView: PreviewView? = null
+    private val cameraExecutor by lazy { Executors.newSingleThreadExecutor() }
     private var cameraProvider: ProcessCameraProvider? = null
+    private var analysisUseCase: ImageAnalysis? = null
+    private var previewUseCase: Preview? = null
+    private var imageCapture: ImageCapture? = null
+    private var previewView: PreviewView? = null
 
-    // --- Text Recognition related variables (MOVED OUT OF companion object) ---
-    // Text recognizer client (can be an instance variable)
-    private val textRecognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-    // State for the currently detected text (should be instance variables)
-    private var currentDetectedText: String = ""
-    private var isProcessingImage: Boolean = false
-    // --- Compose State Holder for UI updates (ADDED) ---
-    private val _detectedTextState = mutableStateOf("Point camera at text...")
-    val detectedText: String
-        get() = _detectedTextState.value
+    private var tts: TextToSpeech? = null
+    private var ttsReady = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // Initialize the camera executor
-        cameraExecutor = Executors.newSingleThreadExecutor()
+        // Initialize TTS
+        tts = TextToSpeech(this) { status ->
+            ttsReady = status == TextToSpeech.SUCCESS
+            if (ttsReady) {
+                tts?.language = Locale.getDefault()
+                speak("Text reading mode activated. Point camera at text and press volume up to capture.")
+            } else {
+                Log.e("ReadTextActivity", "TTS initialization failed")
+            }
+        }
+
+        // Initialize camera
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+        cameraProviderFuture.addListener({
+            cameraProvider = cameraProviderFuture.get()
+            requestCameraAndStart()
+        }, ContextCompat.getMainExecutor(this))
 
         setContent {
-            VisionassistTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    ReadTextScreenContent(
-                        onNavigateBack = { finish() },
-                        detectedText = detectedText, // Pass the detected text state
-                        // Pass the callback to receive the PreviewView reference
-                        onPreviewViewCreated = { previewViewRef ->
-                            previewView = previewViewRef
-                            // Start camera setup only after we have the PreviewView and permission
-                            if (ContextCompat.checkSelfPermission(
-                                    this,
-                                    Manifest.permission.CAMERA
-                                ) == PackageManager.PERMISSION_GRANTED
-                            ) {
-                                startCamera()
-                            } else {
-                                requestCameraPermission()
+            MaterialTheme {
+                Surface {
+                    var recognized by remember { mutableStateOf("") }
+                    var speaking by remember { mutableStateOf(false) }
+                    var captureStatus by remember { mutableStateOf("Ready to capture") }
+
+                    ReadTextScreen(
+                        recognizedText = recognized,
+                        isSpeaking = speaking,
+                        captureStatus = captureStatus,
+                        onPreviewReady = { pv ->
+                            previewView = pv
+                            if (hasCameraPermission()) bindCameraUseCases()
+                        },
+                        onCapture = {
+                            captureStatus = "Capturing..."
+                            speak("Capturing text...", immediate = true)
+                            captureAndReadText { success, text ->
+                                if (success) {
+                                    recognized = text
+                                    speaking = true
+                                    captureStatus = "Text captured"
+                                } else {
+                                    captureStatus = "No text found"
+                                }
                             }
+                        },
+                        onStop = {
+                            speaking = false
+                            stopSpeak()
+                            captureStatus = "Stopped"
                         }
                     )
+
+                    DisposableEffect(Unit) {
+                        onDispose {
+                            // Cleanup handled in onDestroy
+                        }
+                    }
                 }
             }
         }
-        // Initial permission check/request is handled via the callback now
     }
 
-    private fun requestCameraPermission() {
-        when {
-            ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.CAMERA
-            ) == PackageManager.PERMISSION_GRANTED -> {
-                Log.d(TAG, "Camera permission already granted")
-                startCamera() // Start camera if permission was already granted
-            }
-            else -> {
-                requestPermissionLauncher.launch(Manifest.permission.CAMERA)
-            }
+    private fun requestCameraAndStart() {
+        if (hasCameraPermission()) {
+            bindCameraUseCases()
+        } else {
+            speak("Camera permission required", true)
         }
     }
 
-    // --- CameraX Setup Logic ---
-
-    private fun startCamera() {
-        val previewView = previewView ?: return
-
-        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
-
-        cameraProviderFuture.addListener({
-            try {
-                // CameraProvider is now guaranteed to be available
-                cameraProvider = cameraProviderFuture.get()
-
-                // Build and bind the camera use cases
-                bindCameraUseCases()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error getting camera provider", e)
-            }
-        }, ContextCompat.getMainExecutor(this))
-    }
+    private fun hasCameraPermission(): Boolean =
+        ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
+                PackageManager.PERMISSION_GRANTED
 
     private fun bindCameraUseCases() {
-        val cameraProvider = cameraProvider ?: return.also { Log.e(TAG, "CameraProvider is null") }
-        val previewView = previewView ?: return.also { Log.e(TAG, "PreviewView is null") }
+        val provider = cameraProvider ?: return
+        val pv = previewView ?: return
 
-        // Create the Preview use case
-        val preview = Preview.Builder().build().apply {
-            setSurfaceProvider(previewView.surfaceProvider)
+        provider.unbindAll()
+
+        // Preview use case
+        previewUseCase = Preview.Builder().build().also {
+            it.setSurfaceProvider(pv.surfaceProvider)
         }
 
-        // Create the ImageAnalysis use case for text recognition
-        val imageAnalysis = ImageAnalysis.Builder()
-            .setTargetResolution(Size(1280, 720)) // Set target resolution
-            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST) // Handle backpressure
+        // Image capture use case
+        imageCapture = ImageCapture.Builder().build()
+
+        // Analysis use case (optional, for continuous preview)
+        val analyzer = ImageAnalysis.Builder()
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
             .build()
-
-        // Set the analyzer for ImageAnalysis
-        imageAnalysis.setAnalyzer(cameraExecutor!!, TextAnalyzer())
-
-        // Select the back camera
-        val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+        analysisUseCase = analyzer
 
         try {
-            // Unbind any existing use cases
-            cameraProvider.unbindAll()
-
-            // Check if the required camera exists and bind the use cases
-            if (cameraProvider.hasCamera(cameraSelector)) {
-                cameraProvider.bindToLifecycle(
-                    this as LifecycleOwner, // LifecycleOwner
-                    cameraSelector,        // CameraSelector
-                    preview,               // Preview UseCase
-                    imageAnalysis          // ImageAnalysis UseCase
-                )
-                Log.d(TAG, "Camera use cases bound successfully")
-            } else {
-                Log.e(TAG, "Back camera not available")
-                Toast.makeText(this, "Back camera not found", Toast.LENGTH_SHORT).show()
-            }
-
-        } catch (exc: Exception) {
-            Log.e(TAG, "Use case binding failed", exc)
+            provider.bindToLifecycle(
+                this,
+                CameraSelector.DEFAULT_BACK_CAMERA,
+                previewUseCase,
+                imageCapture,
+                analysisUseCase
+            )
+        } catch (e: Exception) {
+            Log.e("ReadTextActivity", "Use case binding failed", e)
         }
     }
 
-    // Add this inner class for analyzing camera frames
-    inner class TextAnalyzer : ImageAnalysis.Analyzer {
-        override fun analyze(imageProxy: ImageProxy) {
-            // Avoid processing if already processing or if activity is finishing
-            if (isProcessingImage || isFinishing) {
-                imageProxy.close()
-                return
-            }
-
-            isProcessingImage = true
-
-            val mediaImage = imageProxy.image
-            if (mediaImage != null) {
-                // Create InputImage from ImageProxy
-                val rotationDegrees = imageProxy.imageInfo.rotationDegrees
-                val inputImage = InputImage.fromMediaImage(mediaImage, rotationDegrees)
-
-                // Process the image with ML Kit Text Recognition
-                textRecognizer.process(inputImage)
-                    .addOnSuccessListener { visionText ->
-                        // Task completed successfully
-                        processTextRecognitionResult(visionText)
-                    }
-                    .addOnFailureListener { e ->
-                        // Task failed with an exception
-                        Log.e(TAG, "Text recognition failed", e)
-                    }
-                    .addOnCompleteListener {
-                        // Always close the image proxy to release resources
-                        imageProxy.close()
-                        isProcessingImage = false
-                    }
-            } else {
-                imageProxy.close()
-                isProcessingImage = false
-            }
-        }
-    }
-
-    // Add this function to process the text recognition results
-    private fun processTextRecognitionResult(visionText: Text) {
-        // Get the most relevant block of text (you can adjust this logic)
-        val detectedTextBuilder = StringBuilder()
-        for (block in visionText.textBlocks) {
-            // Append block text and a newline
-            detectedTextBuilder.append(block.text).append("\n")
+    private fun captureAndReadText(callback: (Boolean, String) -> Unit) {
+        val imageCaptureUseCase = imageCapture ?: run {
+            speak("Camera not ready. Please try again.", true)
+            callback(false, "")
+            return
         }
 
-        val detectedText = detectedTextBuilder.toString().trim()
+        // Take a picture
+        imageCaptureUseCase.takePicture(
+            cameraExecutor,
+            object : ImageCapture.OnImageCapturedCallback() {
+                override fun onCaptureSuccess(image: ImageProxy) {
+                    try {
+                        val rotation = image.imageInfo.rotationDegrees
+                        val mediaImage = image.image
 
-        // Only update if text has changed significantly
-        if (detectedText.isNotEmpty() && detectedText != currentDetectedText) {
-            currentDetectedText = detectedText
-            Log.d(TAG, "Detected Text: $currentDetectedText")
+                        if (mediaImage != null) {
+                            val inputImage = InputImage.fromMediaImage(mediaImage, rotation)
+                            val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
 
-            // Update the UI state on the main thread (ADDED runOnUiThread)
-            runOnUiThread {
-                _detectedTextState.value = currentDetectedText
+                            recognizer.process(inputImage)
+                                .addOnSuccessListener { result ->
+                                    val rawText = result.text
+                                    val normalizedText = rawText.replace(Regex("\\s+"), " ").trim()
+
+                                    if (normalizedText.isNotEmpty()) {
+                                        speak("Text captured: $normalizedText", true)
+                                        callback(true, normalizedText)
+                                    } else {
+                                        speak("No text found. Please try again.", true)
+                                        callback(false, "")
+                                    }
+                                }
+                                .addOnFailureListener { exception ->
+                                    Log.e("ReadTextActivity", "Text recognition failed", exception)
+                                    speak("Error capturing text. Please try again.", true)
+                                    callback(false, "")
+                                }
+                                .addOnCompleteListener {
+                                    recognizer.close()
+                                }
+                        } else {
+                            speak("No image captured. Please try again.", true)
+                            callback(false, "")
+                        }
+                    } finally {
+                        image.close()
+                    }
+                }
+
+                override fun onError(exception: ImageCaptureException) {
+                    Log.e("ReadTextActivity", "Image capture failed", exception)
+                    speak("Error capturing image. Please try again.", true)
+                    callback(false, "")
+                }
             }
-
-            // TODO: Announce text via TTS (we'll do this later)
-        }
-    }
-
-    // --- Composable Content (UPDATED SIGNATURE) ---
-    @Composable
-    private fun ReadTextScreenContent(
-        onNavigateBack: () -> Unit,
-        detectedText: String, // Add this parameter to pass detected text
-        onPreviewViewCreated: (PreviewView) -> Unit
-    ) {
-        ReadTextScreen(
-            onBackRequested = onNavigateBack,
-            onPreviewViewCreated = onPreviewViewCreated,
-            detectedText = detectedText // Pass it through to the UI composable
         )
     }
 
+    private fun speak(text: String, immediate: Boolean = false) {
+        if (!ttsReady) {
+            Log.w("ReadTextActivity", "TTS not ready: $text")
+            return
+        }
 
-    // --- Cleanup ---
+        if (!immediate) {
+            tts?.stop()
+        }
+
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "read_text")
+    }
+
+    private fun stopSpeak() {
+        tts?.stop()
+    }
+
+    // Volume key controls for blind users
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        return when (keyCode) {
+            KeyEvent.KEYCODE_VOLUME_UP -> {
+                speak("Capturing text...", true)
+                captureAndReadText { success, text -> }
+                true
+            }
+            KeyEvent.KEYCODE_VOLUME_DOWN -> {
+                stopSpeak()
+                speak("Stopped speaking", true)
+                true
+            }
+            else -> super.onKeyDown(keyCode, event)
+        }
+    }
 
     override fun onDestroy() {
         super.onDestroy()
-        cameraExecutor?.shutdown()
-        // Consider unbinding camera use cases if needed for more complex scenarios
-        // Shutdown the text recognizer when the activity is destroyed
-        textRecognizer.close()
+        cameraExecutor.shutdown()
+        tts?.shutdown()
     }
 }

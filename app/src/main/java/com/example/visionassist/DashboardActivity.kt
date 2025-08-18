@@ -20,13 +20,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import com.example.visionassist.design.DashboardScreen
 import com.example.visionassist.design.Module
-import com.example.visionassist.logic.SimpleTTS
+import com.example.visionassist.logic.SimpleTTSDashboard
 import com.example.visionassist.ui.theme.VisionassistTheme
 import java.util.*
 
 class DashboardActivity : ComponentActivity() {
 
-    private lateinit var dashboardTTS: SimpleTTS
+    private lateinit var dashboardTTS: SimpleTTSDashboard
     private var speechRecognizer: SpeechRecognizer? = null
     private lateinit var vibrator: Vibrator
     private var userName: String = ""
@@ -38,7 +38,7 @@ class DashboardActivity : ComponentActivity() {
         userName = intent.getStringExtra("USER_NAME") ?: "User"
 
         // Initialize separate TTS for dashboard
-        dashboardTTS = SimpleTTS(this)
+        dashboardTTS = SimpleTTSDashboard(this)
         dashboardTTS.initialize()
 
         // Initialize speech recognizer

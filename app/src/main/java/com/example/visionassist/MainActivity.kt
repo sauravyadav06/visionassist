@@ -1,6 +1,6 @@
 package com.example.visionassist
 
-import VoiceAssistant
+import VoiceAssistantWelcome
 import android.Manifest
 import android.content.Intent
 import android.os.Bundle
@@ -15,7 +15,7 @@ import com.example.visionassist.ui.theme.VisionassistTheme
 
 class MainActivity : ComponentActivity() {
 
-    private var voiceAssistant: VoiceAssistant? = null
+    private var voiceAssistantWelcome: VoiceAssistantWelcome? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,7 +50,7 @@ class MainActivity : ComponentActivity() {
         // ✅ Run ONLY when permission is granted
         LaunchedEffect(permissionGranted) {
             if (permissionGranted) {
-                voiceAssistant = VoiceAssistant(context = this@MainActivity).apply {
+                voiceAssistantWelcome = VoiceAssistantWelcome(context = this@MainActivity).apply {
                     initialize {
                         speak("Hello! Welcome to VisionAssist. May I know your good name to assist you?")
                         isListening = true
@@ -73,7 +73,7 @@ class MainActivity : ComponentActivity() {
         // ✅ Cleanup
         DisposableEffect(Unit) {
             onDispose {
-                voiceAssistant?.shutdown()
+                voiceAssistantWelcome?.shutdown()
             }
         }
 
@@ -91,7 +91,7 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        voiceAssistant?.shutdown()
+        voiceAssistantWelcome?.shutdown()
         super.onDestroy()
     }
 }

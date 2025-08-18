@@ -6,7 +6,7 @@ import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import java.util.*
 
-class SimpleTTS(private val context: Context) : TextToSpeech.OnInitListener {
+class SimpleTTSDashboard(private val context: Context) : TextToSpeech.OnInitListener {
 
     private var textToSpeech: TextToSpeech? = null
     private var isInitialized = false
