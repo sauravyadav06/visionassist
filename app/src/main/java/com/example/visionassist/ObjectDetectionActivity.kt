@@ -3,77 +3,118 @@ package com.example.visionassist
 import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.util.Log
-import android.widget.Toast
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.runtime.*
+import androidx.annotation.OptIn
+import androidx.camera.core.*
+import androidx.camera.lifecycle.ProcessCameraProvider
+import androidx.camera.view.PreviewView
+import androidx.compose.runtime.mutableStateOf
 import androidx.core.content.ContextCompat
-import com.example.visionassist.ui.design.ObjectDetectionScreen // We'll create this next
-import com.example.visionassist.ui.theme.VisionassistTheme
-//import java.lang.reflect.Modifier
-import androidx.compose.ui.Modifier
-
+import com.example.visionassist.design.ObjectDetectionScreen
+import com.example.visionassist.logic.ObjectDetectionLogic
+import com.google.mlkit.vision.common.InputImage
 
 class ObjectDetectionActivity : ComponentActivity() {
+    private lateinit var previewView: PreviewView
+    private lateinit var objectLogic: ObjectDetectionLogic
 
-    private val requestPermissionLauncher = registerForActivityResult(
+    private val scanStatus = mutableStateOf("Initializing...")
+    private val isPaused = mutableStateOf(false)
+
+    private val cameraPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
+    ) { isGranted: Boolean ->
         if (isGranted) {
-            Log.d("ObjectDetectionActivity", "Camera permission granted")
-            // Permission granted, camera setup can proceed (handled in Composable)
+            setupAnalyzer()
         } else {
-            Log.e("ObjectDetectionActivity", "Camera permission denied")
-            Toast.makeText(this, "Camera permission is required for object detection.", Toast.LENGTH_LONG).show()
-            // Optionally, finish the activity or show an error screen
-            // finish()
+            scanStatus.value = "Camera permission denied. Please enable it in Settings."
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        objectLogic = ObjectDetectionLogic(this) { label ->
+            scanStatus.value = label
+        }
+
         setContent {
-            VisionassistTheme {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
-                    ObjectDetectionScreenContent()
+            ObjectDetectionScreen(
+                onPreviewReady = {
+                    previewView = it
+                    checkAndRequestCameraPermission()
+                },
+                scanStatus = scanStatus.value,
+                isPaused = isPaused.value,
+                onPauseToggle = { isPaused.value = !isPaused.value }
+            )
+        }
+    }
+
+    private fun checkAndRequestCameraPermission() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+            == PackageManager.PERMISSION_GRANTED
+        ) {
+            setupAnalyzer()
+        } else {
+            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
+        }
+    }
+
+    @OptIn(ExperimentalGetImage::class)
+    private fun setupAnalyzer() {
+        val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
+        cameraProviderFuture.addListener({
+            val cameraProvider = cameraProviderFuture.get()
+
+            val preview = Preview.Builder().build().also {
+                it.setSurfaceProvider(previewView.surfaceProvider)
+            }
+
+            // Added backpressure strategy for better real-time performance
+            val analysis = ImageAnalysis.Builder()
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .build()
+
+            analysis.setAnalyzer(ContextCompat.getMainExecutor(this)) { imageProxy ->
+                if (!isPaused.value) {
+                    val mediaImage = imageProxy.image
+                    if (mediaImage != null) {
+                        val image = InputImage.fromMediaImage(
+                            mediaImage,
+                            imageProxy.imageInfo.rotationDegrees
+                        )
+                        // This is the crucial change: pass imageProxy to the logic class
+                        objectLogic.processImage(image, imageProxy)
+                    } else {
+                        // Close the image if mediaImage is null
+                        imageProxy.close()
+                    }
+                } else {
+                    // Close the image if detection is paused
+                    imageProxy.close()
                 }
             }
-        }
 
-        // Request camera permission
-        requestCameraPermission()
+            val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
+            cameraProvider.unbindAll()
+            cameraProvider.bindToLifecycle(this, cameraSelector, preview, analysis)
+        }, ContextCompat.getMainExecutor(this))
     }
 
-    private fun requestCameraPermission() {
-        when {
-            ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.CAMERA
-            ) == PackageManager.PERMISSION_GRANTED -> {
-                Log.d("ObjectDetectionActivity", "Camera permission already granted")
-                // Permission already granted, proceed with setup
-            }
-            else -> {
-                requestPermissionLauncher.launch(Manifest.permission.CAMERA)
-            }
+    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
+        if (keyCode == KeyEvent.KEYCODE_VOLUME_UP) {
+            isPaused.value = !isPaused.value
+            return true
         }
+        return super.onKeyDown(keyCode, event)
     }
 
-    @Composable
-    private fun ObjectDetectionScreenContent() {
-        // Pass context or necessary callbacks if needed for permission checks within Composable
-        // For now, we'll just display the screen
-        ObjectDetectionScreen(
-            onBackRequested = { finish() } // Provide a way to go back
-        )
+    override fun onDestroy() {
+        super.onDestroy()
+        objectLogic.shutdown()
     }
 }

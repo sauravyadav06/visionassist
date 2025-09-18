@@ -8,6 +8,7 @@ import android.util.Log
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.annotation.OptIn
 import androidx.camera.core.*
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
@@ -156,6 +157,7 @@ class ReadTextActivity : ComponentActivity() {
         imageCaptureUseCase.takePicture(
             cameraExecutor,
             object : ImageCapture.OnImageCapturedCallback() {
+                @OptIn(ExperimentalGetImage::class)
                 override fun onCaptureSuccess(image: ImageProxy) {
                     try {
                         val rotation = image.imageInfo.rotationDegrees

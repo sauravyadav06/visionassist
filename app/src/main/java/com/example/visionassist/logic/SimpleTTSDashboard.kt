@@ -95,3 +95,4 @@ class SimpleTTSDashboard(private val context: Context) : TextToSpeech.OnInitList
         private const val TAG = "SimpleTTS"
     }
 }
+

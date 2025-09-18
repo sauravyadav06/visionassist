@@ -35,19 +35,19 @@ class MainActivity : ComponentActivity() {
             contract = ActivityResultContracts.RequestPermission(),
             onResult = { isGranted ->
                 if (isGranted) {
-                    permissionGranted = true  // ✅ Update state → triggers LaunchedEffect
+                    permissionGranted = true  //  Update state → triggers LaunchedEffect
                 } else {
                     Toast.makeText(this, "Mic access required!", Toast.LENGTH_LONG).show()
                 }
             }
         )
 
-        // ✅ Launch permission request
+        //  Launch permission request
         LaunchedEffect(Unit) {
             permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
         }
 
-        // ✅ Run ONLY when permission is granted
+        //  Run ONLY when permission is granted
         LaunchedEffect(permissionGranted) {
             if (permissionGranted) {
                 voiceAssistantWelcome = VoiceAssistantWelcome(context = this@MainActivity).apply {
@@ -70,14 +70,14 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // ✅ Cleanup
+        //  Cleanup
         DisposableEffect(Unit) {
             onDispose {
                 voiceAssistantWelcome?.shutdown()
             }
         }
 
-        // ✅ Show UI
+        // Show UI
         VisionassistTheme() {
             WelcomeScreen(isListening = isListening, userName = userName)
         }

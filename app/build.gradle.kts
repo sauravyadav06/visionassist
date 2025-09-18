@@ -65,6 +65,8 @@ dependencies {
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.camera.core)
     implementation(libs.firebase.crashlytics.buildtools)
+
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -92,4 +94,11 @@ dependencies {
 
     implementation ("com.google.mlkit:translate:17.0.1")
     implementation ("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+
+
+    implementation ("com.google.mlkit:object-detection:17.0.2")
+    //implementation ("com.google.mlkit:object-detection-custom:17.0.2")
+
+
+
 }
