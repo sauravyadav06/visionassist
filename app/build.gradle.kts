@@ -4,6 +4,8 @@ plugins {
 }
 
 android {
+
+
     namespace = "com.example.visionassist"
     compileSdk = 35
 
@@ -47,6 +49,11 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    aaptOptions {
+        noCompress("tflite")
+    }
+
 }
 
 dependencies {
@@ -65,6 +72,10 @@ dependencies {
     implementation(libs.androidx.constraintlayout)
     implementation(libs.androidx.camera.core)
     implementation(libs.firebase.crashlytics.buildtools)
+    implementation(libs.androidx.room.external.antlr)
+    //implementation(libs.litert.support.api)
+    implementation(libs.androidx.runner)
+    implementation(libs.androidx.espresso.core)
 
 
     testImplementation(libs.junit)
@@ -96,9 +107,15 @@ dependencies {
     implementation ("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
 
 
-    implementation ("com.google.mlkit:object-detection:17.0.2")
+   // implementation ("com.google.mlkit:object-detection:17.0.2")
     //implementation ("com.google.mlkit:object-detection-custom:17.0.2")
 
 
+    implementation("org.tensorflow:tensorflow-lite:2.14.0")
 
+    // TensorFlow Lite Support (for TensorImage, ImageProcessor, NormalizeOp, etc.)
+    implementation("org.tensorflow:tensorflow-lite-support:0.4.4")
+
+    // (Optional) GPU Delegate for speed
+    implementation("org.tensorflow:tensorflow-lite-gpu:2.14.0")
 }
